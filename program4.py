@@ -6,7 +6,7 @@ import microcontroller
 
 led = None
 last_toggle = 0
-program = "Program 3"
+program = "Program 4"
 timeOut = 4
 
 def setup(context):

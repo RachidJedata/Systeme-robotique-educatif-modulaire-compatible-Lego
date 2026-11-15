@@ -4,7 +4,7 @@ import board
 import digitalio
 import microcontroller
 import os
-
+import matrice # implementation de la LED 8*8
 
 print("MASTER CONTROLLER")
 
@@ -166,6 +166,9 @@ print("\nAvailable applications:")
 for i, program in enumerate(programs):
     print(i, "-", program)
 
+# Au démarrage
+matrice.initialiser_matrice(PIN_MATRICE)
+matrice.afficher_smiley()
 
 # ==========================================
 # MAIN MASTER LOOP
@@ -187,6 +190,8 @@ while True:
 
         print("\nSelected:", programs[selected])
 
+        matrice.afficher_numero(selected + 1)
+
         wait_release(previous)
 
     # NEXT
@@ -196,7 +201,11 @@ while True:
 
         print("\nSelected:", programs[selected])
 
+        matrice.afficher_numero(selected + 1)
+
         wait_release(next_btn)
+
+        
 
     # RUN
     if not run_btn.value:
@@ -211,4 +220,7 @@ while True:
         shared_memory["selected_program"] = None
         context["exit_requested"] = False
 
+        matrice.afficher_numero(selected + 1)
+
     time.sleep(0.02)
+
