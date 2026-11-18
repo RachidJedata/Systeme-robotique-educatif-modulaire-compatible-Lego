@@ -4,13 +4,15 @@ import board
 import digitalio
 import microcontroller
 import os
-import matrice # implementation de la LED 8*8
+import matrice
 
 print("MASTER CONTROLLER")
 
 
 
-
+# ==========================================
+# BUTTON CONFIGURATION
+# ==========================================
 
 def setup_button(pin):
     button = digitalio.DigitalInOut(pin)
@@ -20,8 +22,8 @@ def setup_button(pin):
 
 
 previous = setup_button(microcontroller.pin.PA03)
-next_btn = setup_button(microcontroller.pin.PA04)
-run_btn = setup_button(microcontroller.pin.PB07)
+next_btn = setup_button(microcontroller.pin.PB07)
+run_btn = setup_button(microcontroller.pin.PA04)
 
 
 def wait_release(button):
@@ -30,7 +32,9 @@ def wait_release(button):
     time.sleep(0.05)
 
 
-# Shared RAM between MASTER and SLAVE applications
+# ==========================================
+# SHARED MEMORY
+# ==========================================
 
 shared_memory = {
     "counter": 0,
@@ -40,15 +44,15 @@ shared_memory = {
     "message": "Ready"
 }
 
-
-
-
 context = {
     "shared": shared_memory,
     "exit_requested": False
 }
 
 
+# ==========================================
+# PROGRAM DISCOVERY
+# ==========================================
 
 def discover_programs():
 
@@ -56,12 +60,21 @@ def discover_programs():
         file[:-3]
         for file in os.listdir("/")
         if file.endswith(".py")
-        and file != "code.py"
+        and file not in ("code.py", "matrice.py")
     ]
 
     programs.sort()
 
     return programs
+
+
+# ==========================================
+# MATRIX MENU DISPLAY
+# ==========================================
+
+def show_menu():
+
+    matrice.afficher_numero(selected + 1)
 
 
 # ==========================================
@@ -76,28 +89,23 @@ def launch_application(program_name):
 
     try:
 
-        # Read application source
         with open(filename, "r") as f:
             program_code = f.read()
 
-        # Reset application context
         context["exit_requested"] = False
 
         shared_memory["selected_program"] = program_name
         shared_memory["application_running"] = True
         shared_memory["message"] = "Starting"
 
-        # Create isolated application namespace
         app_env = {
             "__name__": "__main__",
             "context": context,
             "shared": shared_memory
         }
 
-        # Load application
         exec(program_code, app_env)
 
-        # Get application functions
         setup = app_env.get("setup")
         app_loop = app_env.get("loop")
         cleanup = app_env.get("cleanup")
@@ -105,7 +113,6 @@ def launch_application(program_name):
         if not callable(app_loop):
             raise Exception("Application must define loop(context)")
 
-        # Initialize slave
         if callable(setup):
             setup(context)
 
@@ -116,10 +123,8 @@ def launch_application(program_name):
         # MASTER-SLAVE LOOP
         while not context["exit_requested"]:
 
-            # Execute one application cycle
             app_loop(context)
 
-            # MASTER monitors RUN button
             if not run_btn.value:
 
                 print("[MASTER] Stop requested")
@@ -129,7 +134,6 @@ def launch_application(program_name):
 
             time.sleep(0.001)
 
-        # Stop slave application
         if callable(cleanup):
             cleanup(context)
 
@@ -146,13 +150,16 @@ def launch_application(program_name):
 
 
 # ==========================================
-# MASTER MENU
+# INITIALIZATION
 # ==========================================
+
+matrice.initialiser_matrice()
 
 programs = discover_programs()
 
 if not programs:
 
+    matrice.afficher_smiley()
     print("No applications found!")
 
     while True:
@@ -161,14 +168,18 @@ if not programs:
 
 selected = 0
 
-print("\nAvailable applications:")
 
-for i, program in enumerate(programs):
-    print(i, "-", program)
+# ==========================================
+# STARTUP ANIMATION
+# ==========================================
 
-# Au démarrage
-matrice.initialiser_matrice(PIN_MATRICE)
+# Display smiley at startup
 matrice.afficher_smiley()
+time.sleep(2)
+
+# Display initial menu
+show_menu()
+
 
 # ==========================================
 # MAIN MASTER LOOP
@@ -176,51 +187,46 @@ matrice.afficher_smiley()
 
 while True:
 
-    print(
-        "\rSelected:",
-        programs[selected],
-        "       ",
-        end=""
-    )
-
-    # PREVIOUS
+    # PREVIOUS BUTTON
     if not previous.value:
 
         selected = (selected - 1) % len(programs)
 
-        print("\nSelected:", programs[selected])
+        show_menu()
 
-        matrice.afficher_numero(selected + 1)
+        print("[MENU] Selected:", programs[selected])
 
         wait_release(previous)
 
-    # NEXT
+
+    # NEXT BUTTON
     if not next_btn.value:
 
         selected = (selected + 1) % len(programs)
 
-        print("\nSelected:", programs[selected])
+        show_menu()
 
-        matrice.afficher_numero(selected + 1)
+        print("[MENU] Selected:", programs[selected])
 
         wait_release(next_btn)
 
-        
 
-    # RUN
+    # RUN BUTTON
     if not run_btn.value:
 
         wait_release(run_btn)
 
         launch_application(programs[selected])
 
-        print("\nReturning to MASTER menu")
+        print("\n[MASTER] Returning to menu")
 
-        # Refresh shared variables
+        # Reset shared variables
         shared_memory["selected_program"] = None
+        shared_memory["application_running"] = False
         context["exit_requested"] = False
 
-        matrice.afficher_numero(selected + 1)
+        # Redisplay selected application
+        show_menu()
+
 
     time.sleep(0.02)
-
