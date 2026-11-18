@@ -1,13 +1,11 @@
 
 import time
-import board
 import digitalio
 import microcontroller
 import os
 import matrice
 
 print("MASTER CONTROLLER")
-
 
 
 # ==========================================
@@ -29,6 +27,7 @@ run_btn = setup_button(microcontroller.pin.PA04)
 def wait_release(button):
     while not button.value:
         time.sleep(0.01)
+
     time.sleep(0.05)
 
 
@@ -57,35 +56,71 @@ context = {
 def discover_programs():
 
     programs = [
-        file[:-3]
+        file
         for file in os.listdir("/")
         if file.endswith(".py")
         and file not in ("code.py", "matrice.py")
     ]
 
-    programs.sort()
+    # Numeric filenames first: 1.py, 2.py, 3.py...
+    programs.sort(
+        key=lambda name: (
+            0, int(name[:-3])
+        ) if name[:-3].isdigit() else (
+            1, name.lower()
+        )
+    )
 
     return programs
 
 
 # ==========================================
-# MATRIX MENU DISPLAY
+# DISPLAY MANAGEMENT
 # ==========================================
 
 def show_menu():
 
-    matrice.afficher_numero(selected + 1)
+    shared_memory["message"] = "MENU"
+
+    filename = programs[selected]
+    program_number = filename[:-3]
+
+    print("\n========== MENU ==========")
+    print("[MENU] Selected application:", filename)
+    print("[MENU] Status: READY")
+    print("==========================")
+
+    # Display the actual program number
+    if program_number.isdigit():
+        matrice.afficher_numero(int(program_number))
+    else:
+        matrice.afficher_numero(selected + 1)
+
+
+def show_running():
+
+    shared_memory["message"] = "RUNNING"
+
+    filename = shared_memory["selected_program"]
+
+    print("\n========== APPLICATION ==========")
+    print("[RUNNING] Application:", filename)
+    print("[RUNNING] Status: ACTIVE")
+    print("=================================")
+
+    # Green matrix = application running
+    matrice.afficher_couleur((0, 255, 0))
 
 
 # ==========================================
 # SLAVE APPLICATION EXECUTION
 # ==========================================
 
-def launch_application(program_name):
+def launch_application(program_filename):
 
-    print("\n[MASTER] Loading:", program_name)
+    print("\n[MASTER] Loading:", program_filename)
 
-    filename = "/" + program_name + ".py"
+    filename = "/" + program_filename
 
     try:
 
@@ -94,7 +129,7 @@ def launch_application(program_name):
 
         context["exit_requested"] = False
 
-        shared_memory["selected_program"] = program_name
+        shared_memory["selected_program"] = program_filename
         shared_memory["application_running"] = True
         shared_memory["message"] = "Starting"
 
@@ -111,14 +146,16 @@ def launch_application(program_name):
         cleanup = app_env.get("cleanup")
 
         if not callable(app_loop):
-            raise Exception("Application must define loop(context)")
+            raise Exception(
+                "Application must define loop(context)"
+            )
 
         if callable(setup):
             setup(context)
 
-        print("[MASTER] Application running")
+        print("[MASTER] Application initialized")
 
-        shared_memory["message"] = "Running"
+        show_running()
 
         # MASTER-SLAVE LOOP
         while not context["exit_requested"]:
@@ -130,6 +167,7 @@ def launch_application(program_name):
                 print("[MASTER] Stop requested")
 
                 context["exit_requested"] = True
+
                 wait_release(run_btn)
 
             time.sleep(0.001)
@@ -146,7 +184,7 @@ def launch_application(program_name):
         shared_memory["application_running"] = False
         shared_memory["message"] = "Stopped"
 
-        print("[MASTER] Application stopped")
+        print("[MASTER] Application stopped:", program_filename)
 
 
 # ==========================================
@@ -160,7 +198,8 @@ programs = discover_programs()
 if not programs:
 
     matrice.afficher_smiley()
-    print("No applications found!")
+
+    print("[MASTER] No applications found!")
 
     while True:
         time.sleep(1)
@@ -173,11 +212,11 @@ selected = 0
 # STARTUP ANIMATION
 # ==========================================
 
-# Display smiley at startup
-matrice.afficher_smiley()
-time.sleep(2)
+print("[MASTER] Starting system...")
 
-# Display initial menu
+matrice.afficher_smiley()
+time.sleep(4)
+
 show_menu()
 
 
@@ -187,31 +226,36 @@ show_menu()
 
 while True:
 
+    # --------------------------------------
     # PREVIOUS BUTTON
+    # --------------------------------------
+
     if not previous.value:
 
         selected = (selected - 1) % len(programs)
 
         show_menu()
 
-        print("[MENU] Selected:", programs[selected])
-
         wait_release(previous)
 
 
+    # --------------------------------------
     # NEXT BUTTON
+    # --------------------------------------
+
     if not next_btn.value:
 
         selected = (selected + 1) % len(programs)
 
         show_menu()
 
-        print("[MENU] Selected:", programs[selected])
-
         wait_release(next_btn)
 
 
-    # RUN BUTTON
+    # --------------------------------------
+    # RUN / STOP BUTTON
+    # --------------------------------------
+
     if not run_btn.value:
 
         wait_release(run_btn)
@@ -223,6 +267,7 @@ while True:
         # Reset shared variables
         shared_memory["selected_program"] = None
         shared_memory["application_running"] = False
+
         context["exit_requested"] = False
 
         # Redisplay selected application

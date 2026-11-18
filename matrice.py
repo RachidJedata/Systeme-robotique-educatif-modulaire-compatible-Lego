@@ -1,23 +1,17 @@
 
 # ==========================================
-# MATRICE.PY
 # WS2812B 8x8 - SAM E54 Curiosity Ultra
 # CircuitPython
 # ==========================================
 
 import board
 import neopixel
-import time
-
-# ==========================================
-# CONFIGURATION
-# ==========================================
 
 LARGEUR = 8
 HAUTEUR = 8
 NB_LEDS = LARGEUR * HAUTEUR
 
-PIN_DATA = board.PD10  # A remplacer par ton GPIO DATA
+PIN_DATA = board.PD10 
 
 LUMINOSITE = 0.15
 
@@ -56,7 +50,7 @@ def index_led(x, y):
     if y < 0 or y >= HAUTEUR:
         return None
 
-    # Hypothèse : câblage en lignes,
+    # câblage en lignes,
     # de gauche à droite, de haut en bas.
     return y * LARGEUR + x
 
@@ -80,7 +74,6 @@ def effacer_matrice():
 
 
 def afficher_couleur(couleur):
-
     pixels.fill(couleur)
     pixels.show()
 
